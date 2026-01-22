@@ -1,350 +1,178 @@
-Design a 3 Tier AWS VPC with NAT Gateways using Terraform
-Step-01: Introduction
-Understand about Terraform Modules
-Create VPC using Terraform Modules
-Define Input Variables for VPC module and reference them in VPC Terraform Module
-Define local values and reference them in VPC Terraform Module
-Create terraform.tfvars to load variable values by default from this file
-Create vpc.auto.tfvars to load variable values by default from this file related to a VPC
-Define Output Values for VPC
-Step-02: v1-vpc-module - Hardcoded Model
-Step-02-01: How to make a decision of using the public Registry module?
-Understand about Terraform Registry and Modules
-We are going to use a VPC Module from Terraform Public Registry
-Understand about Authenticity of a module hosted on Public Terraform Registry with HashiCorp Verified Tag
-Review the download rate for that module
-Review the latest versions and release history of that module
-Review our feature needs when using that module and ensure if our need is satisfied use the module else use the standard terraform resource definition appraoch.
-Review module inputs, outputs and dependencies too.
-Step-02-02: Create a VPC Module Terraform Configuration
-c1-versions.tf
-c2-generic-variables.tf
-c3-vpc.tf
-Terraform AWS VPC Module
-# Create VPC Terraform Module
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "2.78.0"
+# 3-Tier AWS VPC (Public / Private / DB Subnets) with NAT Gateways — Terraform
 
-  # VPC Basic Details
-  name = "vpc-dev"
-  cidr = "10.0.0.0/16"   
-  azs                 = ["us-east-1a", "us-east-1b"]
-  private_subnets     = ["10.0.1.0/24", "10.0.2.0/24"]
-  public_subnets      = ["10.0.101.0/24", "10.0.102.0/24"]
+This project demonstrates how to design and provision a **production-style 3-tier AWS VPC** using **Terraform** and the widely adopted **terraform-aws-modules/vpc/aws** module.
 
-  # Database Subnets
-  create_database_subnet_group = true
-  create_database_subnet_route_table= true
-  database_subnets    = ["10.0.151.0/24", "10.0.152.0/24"]
+The repository showcases two approaches:
+- **v1 (Hardcoded demo)** – Quick setup for learning and validation
+- **v2 (Standardized & reusable)** – Parameterized, modular, and production-ready design
 
-  #create_database_nat_gateway_route = true
-  #create_database_internet_gateway_route = true
+---
 
-  # NAT Gateways - Outbound Communication
-  enable_nat_gateway = true
-  single_nat_gateway = true
+## What You’ll Build
 
-  # VPC DNS Parameters
-  enable_dns_hostnames = true
-  enable_dns_support = true
+A highly available 3-tier network across **two Availability Zones**:
 
-  public_subnet_tags = {
-    Type = "public-subnets"
-  }
+- **Public subnets** – for ALB, bastion hosts, or public-facing services  
+- **Private application subnets** – for EC2, EKS worker nodes, internal services  
+- **Private database subnets** – for RDS or other database workloads  
 
-  private_subnet_tags = {
-    Type = "private-subnets"
-  }
+Outbound internet access for private subnets is enabled via a **NAT Gateway with Elastic IP**.
 
-  database_subnet_tags = {
-    Type = "database-subnets"
-  }
+### Included Components
+- Amazon VPC with custom CIDR
+- Internet Gateway (IGW)
+- Public, Private, and Database subnets
+- Route tables and routing rules
+- NAT Gateway for outbound access
+- Optional DB subnet group and route table
+- Standardized tagging strategy
 
-  tags = {
-    Owner = "kalyan"
-    Environment = "dev"
-  }
+---
 
-  vpc_tags = {
-    Name = "vpc-dev"
-  }
-}
-Step-03: Execute Terraform Commands
-# Working Folder
-terraform-manifests/v1-vpc-module
+## Architecture Overview
 
-# Terraform Initialize
+*(Recommended: add a simple diagram under `/images/vpc-3tier-terraform.png`)*
+
+Key design highlights:
+- Public subnets route traffic to the Internet Gateway
+- Private subnets route outbound traffic via NAT Gateway
+- Database subnets remain isolated (no direct internet access)
+- Multi-AZ design for high availability
+
+---
+
+## Repository Structure
+
+```
+terraform-manifests/
+├── v1-vpc-module/                  # Hardcoded demo version
+└── v2-vpc-module-standardized/     # Standardized, reusable version
+```
+
+---
+
+## Prerequisites
+
+- Terraform installed (latest stable recommended)
+- AWS CLI configured (`aws configure`)
+- AWS account with permissions to create VPC networking resources
+
+---
+
+## Quick Start – v1 (Hardcoded Demo)
+
+### Navigate to folder
+```
+cd terraform-manifests/v1-vpc-module
+```
+
+### Initialize Terraform
+```
 terraform init
-Observation:
-1. Verify if modules got downloaded to .terraform folder
+```
 
-# Terraform Validate
+### Validate configuration
+```
 terraform validate
+```
 
-# Terraform plan
+### Plan infrastructure
+```
 terraform plan
+```
 
-# Terraform Apply
+### Apply configuration
+```
 terraform apply -auto-approve
-Observation:
-1) Verify VPC
-2) Verify Subnets
-3) Verify IGW
-4) Verify Public Route for Public Subnets
-5) Verify no public route for private subnets
-6) Verify NAT Gateway and Elastic IP for NAT Gateway
-7) Verify NAT Gateway route for Private Subnets
-8) Verify no public route or no NAT Gateway route to Database Subnets
-9) Verify Tags
+```
 
-# Terraform Destroy
+### Verify in AWS Console
+- VPC and subnets created
+- Internet Gateway attached
+- NAT Gateway and Elastic IP provisioned
+- Correct routing for public, private, and database subnets
+- Tags applied as expected
+
+### Destroy resources
+```
 terraform destroy -auto-approve
+```
 
-# Delete Files
-rm -rf .terraform*
-rm -rf terraform.tfstate*
-Step-04: Version Constraints in Terraform with Modules
-Terraform Version Constraints
-For modules locking to the exact version is recommended to ensure there will not be any major breakages in production
-When depending on third-party modules, require specific versions to ensure that updates only happen when convenient to you
-For modules maintained within your organization, specifying version ranges may be appropriate if semantic versioning is used consistently or if there is a well-defined release process that avoids unwanted updates.
-Review and understand this carefully
-Step-05: v2-vpc-module-standardized - Standardized and Generalized
-In the next series of steps we are going to standardize the VPC configuration
-c2-generic-variables.tf
-# Input Variables
-# AWS Region
-variable "aws_region" {
-  description = "Region in which AWS Resources to be created"
-  type = string
-  default = "us-east-1"  
-}
-# Environment Variable
-variable "environment" {
-  description = "Environment Variable used as a prefix"
-  type = string
-  default = "dev"
-}
-# Business Division
-variable "business_divsion" {
-  description = "Business Division in the large organization this Infrastructure belongs"
-  type = string
-  default = "HR"
-}
-Step-06: c3-local-values.tf
-Understand about Local Values
-# Define Local Values in Terraform
-locals {
-  owners = var.business_divsion
-  environment = var.environment
-  name = "${var.business_divsion}-${var.environment}"
-  common_tags = {
-    owners = local.owners
-    environment = local.environment     
-  }
-}
-Step-07: c4-01-vpc-variables.tf
-# VPC Input Variables
+### Cleanup local files
+```
+rm -rf .terraform* terraform.tfstate*
+```
 
-# VPC Name
-variable "vpc_name" {
-  description = "VPC Name"
-  type = string 
-  default = "myvpc"
-}
+---
 
-# VPC CIDR Block
-variable "vpc_cidr_block" {
-  description = "VPC CIDR Block"
-  type = string 
-  default = "10.0.0.0/16"
-}
+## Standardized Version – v2 (Production-Style)
 
-# VPC Availability Zones
-variable "vpc_availability_zones" {
-  description = "VPC Availability Zones"
-  type = list(string)
-  default = ["us-east-1a", "us-east-1b"]
-}
+### Navigate to folder
+```
+cd terraform-manifests/v2-vpc-module-standardized
+```
 
-# VPC Public Subnets
-variable "vpc_public_subnets" {
-  description = "VPC Public Subnets"
-  type = list(string)
-  default = ["10.0.101.0/24", "10.0.102.0/24"]
-}
+### Key Concepts Used
+- Input variables (generic and VPC-specific)
+- Local values for naming and common tags
+- `terraform.tfvars` for generic configuration
+- `vpc.auto.tfvars` for VPC-specific values
+- Output values for downstream integrations
 
-# VPC Private Subnets
-variable "vpc_private_subnets" {
-  description = "VPC Private Subnets"
-  type = list(string)
-  default = ["10.0.1.0/24", "10.0.2.0/24"]
-}
+### Important Files
+- `c2-generic-variables.tf` – region, environment, business division
+- `c3-local-values.tf` – naming conventions and tags
+- `c4-01-vpc-variables.tf` – VPC inputs
+- `c4-02-vpc-module.tf` – VPC module definition
+- `c4-03-vpc-outputs.tf` – outputs
+- `terraform.tfvars` – generic values
+- `vpc.auto.tfvars` – VPC values (auto-loaded)
 
-# VPC Database Subnets
-variable "vpc_database_subnets" {
-  description = "VPC Database Subnets"
-  type = list(string)
-  default = ["10.0.151.0/24", "10.0.152.0/24"]
-}
-
-# VPC Create Database Subnet Group (True / False)
-variable "vpc_create_database_subnet_group" {
-  description = "VPC Create Database Subnet Group"
-  type = bool
-  default = true 
-}
-
-# VPC Create Database Subnet Route Table (True or False)
-variable "vpc_create_database_subnet_route_table" {
-  description = "VPC Create Database Subnet Route Table"
-  type = bool
-  default = true   
-}
-
-  
-# VPC Enable NAT Gateway (True or False) 
-variable "vpc_enable_nat_gateway" {
-  description = "Enable NAT Gateways for Private Subnets Outbound Communication"
-  type = bool
-  default = true  
-}
-
-# VPC Single NAT Gateway (True or False)
-variable "vpc_single_nat_gateway" {
-  description = "Enable only single NAT Gateway in one Availability Zone to save costs during our demos"
-  type = bool
-  default = true
-}
-Step-08: c4-02-vpc-module.tf
-# Create VPC Terraform Module
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "2.78.0"
-  #version = "~> 2.0"
-
-  # VPC Basic Details
-  name = "${local.name}-${var.vpc_name}"
-  cidr = var.vpc_cidr_block
-  azs             = var.vpc_availability_zones
-  public_subnets  = var.vpc_public_subnets
-  private_subnets = var.vpc_private_subnets  
-
-  # Database Subnets
-  database_subnets = var.vpc_database_subnets
-  create_database_subnet_group = var.vpc_create_database_subnet_group
-  create_database_subnet_route_table = var.vpc_create_database_subnet_route_table
-  # create_database_internet_gateway_route = true
-  # create_database_nat_gateway_route = true
-  
-  # NAT Gateways - Outbound Communication
-  enable_nat_gateway = var.vpc_enable_nat_gateway 
-  single_nat_gateway = var.vpc_single_nat_gateway
-
-  # VPC DNS Parameters
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-
-  tags = local.common_tags
-  vpc_tags = local.common_tags
-
-  # Additional Tags to Subnets
-  public_subnet_tags = {
-    Type = "Public Subnets"
-  }
-  private_subnet_tags = {
-    Type = "Private Subnets"
-  }  
-  database_subnet_tags = {
-    Type = "Private Database Subnets"
-  }
-}
-Step-09: c4-03-vpc-outputs.tf
-# VPC Output Values
-
-# VPC ID
-output "vpc_id" {
-  description = "The ID of the VPC"
-  value       = module.vpc.vpc_id
-}
-
-# VPC CIDR blocks
-output "vpc_cidr_block" {
-  description = "The CIDR block of the VPC"
-  value       = module.vpc.vpc_cidr_block
-}
-
-# VPC Private Subnets
-output "private_subnets" {
-  description = "List of IDs of private subnets"
-  value       = module.vpc.private_subnets
-}
-
-# VPC Public Subnets
-output "public_subnets" {
-  description = "List of IDs of public subnets"
-  value       = module.vpc.public_subnets
-}
-
-# VPC NAT gateway Public IP
-output "nat_public_ips" {
-  description = "List of public Elastic IPs created for AWS NAT Gateway"
-  value       = module.vpc.nat_public_ips
-}
-
-# VPC AZs
-output "azs" {
-  description = "A list of availability zones spefified as argument to this module"
-  value       = module.vpc.azs
-}
-Step-10: terraform.tfvars
-# Generic Variables
-aws_region = "us-east-1"  
-environment = "dev"
-business_divsion = "HR"
-Step-11: vpc.auto.tfvars
-# VPC Variables
-vpc_name = "myvpc"
-vpc_cidr_block = "10.0.0.0/16"
-vpc_availability_zones = ["us-east-1a", "us-east-1b"]
-vpc_public_subnets = ["10.0.101.0/24", "10.0.102.0/24"]
-vpc_private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
-vpc_database_subnets= ["10.0.151.0/24", "10.0.152.0/24"]
-vpc_create_database_subnet_group = true 
-vpc_create_database_subnet_route_table = true   
-vpc_enable_nat_gateway = true  
-vpc_single_nat_gateway = true
-Step-12: Execute Terraform Commands
-# Working Folder
-terraform-manifests/v2-vpc-module-standardized
-
-# Terraform Initialize
+### Execute Terraform
+```
 terraform init
-
-# Terraform Validate
 terraform validate
-
-# Terraform plan
 terraform plan
-
-# Terraform Apply
 terraform apply -auto-approve
-Observation:
-1) Verify VPC
-2) Verify Subnets
-3) Verify IGW
-4) Verify Public Route for Public Subnets
-5) Verify no public route for private subnets
-6) Verify NAT Gateway and Elastic IP for NAT Gateway
-7) Verify NAT Gateway route for Private Subnets
-8) Verify no public route or no NAT Gateway route to Database Subnets
-9) Verify Tags
-Step-13: Clean-Up
-# Terraform Destroy
-terraform destroy -auto-approve
+```
 
-# Delete Files
-rm -rf .terraform*
-rm -rf terraform.tfstate*
+Destroy and cleanup steps are the same as v1.
+
+---
+
+## Terraform Module Used
+
+This project uses the community-maintained module:
+- **terraform-aws-modules/vpc/aws**
+
+Best practices when using public registry modules:
+- Verify HashiCorp Verified badge
+- Review download count and release history
+- Pin module versions for stability
+- Validate inputs, outputs, and dependencies
+
+---
+
+## Outputs
+
+After successful deployment, the following outputs are available:
+- VPC ID
+- VPC CIDR block
+- Public subnet IDs
+- Private subnet IDs
+- Availability Zones
+- NAT Gateway public IPs
+
+---
+
+## Cost & Design Considerations
+
+- A **single NAT Gateway** is used by default to reduce demo costs
+- For production environments, consider **one NAT Gateway per AZ**
+- Optional enhancements:
+  - VPC Endpoints (S3, DynamoDB, ECR)
+  - VPC Flow Logs
+  - CI/CD automation for Terraform
+
+---
+
