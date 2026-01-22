@@ -31,8 +31,6 @@ Outbound internet access for private subnets is enabled via a **NAT Gateway with
 
 ## Architecture Overview
 
-*(Recommended: add a simple diagram under `/images/vpc-3tier-terraform.png`)*
-
 Key design highlights:
 - Public subnets route traffic to the Internet Gateway
 - Private subnets route outbound traffic via NAT Gateway
